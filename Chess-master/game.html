@@ -1,0 +1,194 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+  <title>Chess Template</title>
+  <link rel="stylesheet" href="css/chessboard.css" />
+  <link rel="stylesheet" href="css/style.css" />
+  <audio>
+    <source src="sounds/move.mp3">
+    </source>
+    <source src="sounds/yahoo.mp3">
+    </source>
+  </audio>
+  <audio>
+    <source src="sounds/yahoo.mp3">
+    </source>
+  </audio>
+</head>
+
+<body>
+
+  <script src="js/chess.js"></script>
+  <a id="signOut" style="position: absolute; top: 20px; left: 20px; font-size: 20px;">sign out</a>
+  <div id="board"></div>
+  <div id="result"></div>
+
+  <script src="js/json3.min.js"></script>
+  <script src="js/jquery-1.10.1.min.js"></script>
+  <script src="js/chessboard.js"></script>
+
+
+<script src="https://www.gstatic.com/firebasejs/5.7.1/firebase.js"></script>
+<script>
+  // Initialize Firebase
+  var config = {
+    apiKey: "AIzaSyCBtxnNC8R2-ADs96YplNGGz2aayAR6fvk",
+    authDomain: "chess-fa2eb.firebaseapp.com",
+    databaseURL: "https://chess-fa2eb.firebaseio.com",
+    projectId: "chess-fa2eb",
+    storageBucket: "chess-fa2eb.appspot.com",
+    messagingSenderId: "1043449475893"
+  };
+  firebase.initializeApp(config);
+    var currentUser;
+    firebase.auth().onAuthStateChanged(function (user) {
+      if (user) {
+        currentUser = user;
+      } else {
+        location.href = "login.html";
+        console.log("user not log in ");
+
+      }
+    });
+
+    console.log(firebase.auth().currentUser); //get the user info any time
+    $("#signOut").click(function () {
+      firebase.auth().signOut().then(function () {
+      }).catch(function (error) {
+        // An error happened.
+      });
+    });
+  </script>
+
+
+  <script>
+
+    var init = function () {
+      var position = 'start';
+      var gamekey = localStorage.getItem("key");
+      console.log(gamekey);
+      if (gamekey == null) {
+        console.log("game key is null"+ localStorage["key"]);
+        location.href = "index.html";
+      }
+      var games = firebase.database().ref("games");
+      games.once('value', function (snapshot) {
+        if (!snapshot.hasChild(gamekey)) {
+          console.log("firebase don't have game key");
+          location.href = "index.html";
+        }
+      });
+      var gameRef = firebase.database().ref("games/" +gamekey+"/fen");
+      var curtrentFen = "";
+      var ff=false;
+      var flageturn =localStorage.getItem("turn");
+      var mcolor ='s';
+      if(flageturn =="true"){
+        mcolor = 'w';
+      }else{
+        mcolor = 'b';
+      }
+      gameRef.on('value', function (snapshot) {
+        curtrentFen = snapshot.val();
+        if( ff == true  ){
+          board.position(curtrentFen);
+          game = new Chess(curtrentFen);
+          flageturn = true;
+        }
+        ff = true;
+      });
+      var board,
+        game = new Chess(position === 'start' ? undefined : position);
+      // do not pick up pieces if the game is over
+      // only pick up pieces for the side to move
+      var onDragStart = function (source, piece, position, orientation) {
+        console.log("onDragStart "+game.turn() + " "+ mcolor + " is my turn: "+flageturn);
+        if (game.game_over() === true ||  game.turn() != mcolor  ||
+          (game.turn() === 'w' && piece.search(/^b/) !== -1) ||
+          (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
+            console
+          return false;
+        }
+      };
+
+      var onDrop = function (source, target) {
+        // see if the move is legal
+        var move = game.move({
+          from: source,
+          to: target,
+          promotion: 'q' // NOTE: always promote to a queen for example simplicity
+        });
+
+        // illegal move
+        if (move === null) return 'snapback';
+
+        updateStatus();
+        $("audio")[0].play();
+        flageturn = false;
+        gameRef.set(game.fen())
+      };
+
+      // update the board position after the piece snap 
+      // for castling, en passant, pawn promotion
+      var onSnapEnd = function () {
+        board.position(game.fen());
+      };
+
+      var updateStatus = function () {
+        var status = '';
+
+        var moveColor = 'White';
+        if (game.turn() === 'b') {
+          moveColor = 'Black';
+        }
+
+        // checkmate?
+        if (game.in_checkmate() === true) {
+          status = 'Game over, ' + (moveColor === 'White' ? 'Black' : 'White') + ' won.';
+          $("audio")[1].play();
+        }
+
+        // draw?
+        else if (game.in_draw() === true) {
+          status = 'Game over, drawn position';
+          $("audio")[1].play();
+        }
+
+        // game still on
+        else {
+          status = moveColor + ' to move';
+
+          // check?
+          if (game.in_check() === true) {
+            status += ', ' + moveColor + ' is in check';
+          }
+        }
+
+        $("#result").html(status);
+        console.log(game.fen());
+        console.log(game.pgn());
+      };
+
+      var cfg = {
+        draggable: true,
+        position: position,
+        onDragStart: onDragStart,
+        onDrop: onDrop,
+        onSnapEnd: onSnapEnd
+      };
+      board = ChessBoard('board', cfg);
+      updateStatus();
+
+    }; // end init()
+    $(document).ready(init);
+
+//position = 'rnbqkbnr/ppp2ppp/3p4/4p3/3PP3/8/PPP2PPP/RNBQKBNR w KQkq - 0 3';
+//init();
+//unmark to start from a different position
+  </script>
+</body>
+
+</html>
